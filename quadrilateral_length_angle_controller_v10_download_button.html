@@ -1,0 +1,1195 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>사각형 길이·각 조절기</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Pretendard", "Noto Sans KR", Arial, sans-serif;
+    background: #f6f8fb;
+    color: #1f2937;
+  }
+  .wrap {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+  .topbar {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+  .topbar-text { min-width: 0; }
+  h1 {
+    margin: 0 0 6px;
+    font-size: 26px;
+  }
+  .subtitle {
+    margin: 0 0 8px;
+    color: #64748b;
+    font-size: 14px;
+  }
+  .download-btn {
+    border: 1px solid #93c5fd;
+    background: #eff6ff;
+    color: #1d4ed8;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-weight: 800;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .download-btn:hover { background: #dbeafe; }
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 350px;
+    gap: 18px;
+    align-items: start;
+  }
+  .card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    box-shadow: 0 5px 20px rgba(15,23,42,.06);
+  }
+  .canvas-card { padding: 12px; }
+  svg {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 4 / 3;
+    display: block;
+    border-radius: 12px;
+    background: white;
+    user-select: none;
+    touch-action: none;
+  }
+  .panel {
+    padding: 16px;
+  }
+  .section {
+    padding: 0;
+    border-bottom: 1px solid #eef2f7;
+  }
+  .section:last-child { border-bottom: 0; }
+  .section details {
+    padding: 0;
+  }
+  .section summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 14px 2px;
+    font-size: 15px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .section summary::-webkit-details-marker { display: none; }
+  .section summary::after {
+    content: "＋";
+    width: 28px;
+    height: 28px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+    font-size: 18px;
+    line-height: 1;
+    flex: 0 0 auto;
+  }
+  .section details[open] summary::after {
+    content: "−";
+    background: #eff6ff;
+    border-color: #93c5fd;
+    color: #1d4ed8;
+  }
+  .section .section-body {
+    padding: 0 2px 14px;
+  }
+  .row {
+    display: grid;
+    grid-template-columns: 90px 1fr 72px;
+    gap: 8px;
+    align-items: center;
+    margin: 8px 0;
+  }
+  .row.two {
+    grid-template-columns: 120px 1fr;
+  }
+  .choice-group {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin: 8px 0 10px;
+  }
+  .choice-btn {
+    border: 1px solid #cbd5e1;
+    background: white;
+    border-radius: 10px;
+    padding: 9px 6px;
+    cursor: pointer;
+    font-weight: 700;
+    color: #475569;
+  }
+  .choice-btn:hover {
+    background: #f8fafc;
+  }
+  .choice-btn.active {
+    background: #dbeafe;
+    border-color: #60a5fa;
+    color: #1d4ed8;
+    box-shadow: inset 0 0 0 1px #93c5fd;
+  }
+  label {
+    font-size: 13px;
+    color: #475569;
+  }
+  select, input[type=number], button {
+    font: inherit;
+  }
+  select, input[type=number] {
+    width: 100%;
+    border: 1px solid #cbd5e1;
+    border-radius: 9px;
+    padding: 7px 8px;
+    background: white;
+  }
+  input[type=range] { width: 100%; }
+  .checks {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .checks label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  button {
+    border: 1px solid #cbd5e1;
+    background: white;
+    border-radius: 10px;
+    padding: 9px 10px;
+    cursor: pointer;
+  }
+  button:hover { background: #f8fafc; }
+  .primary {
+    background: #eff6ff;
+    border-color: #93c5fd;
+    color: #1d4ed8;
+  }
+  .hint {
+    background: #f8fafc;
+    border-radius: 10px;
+    padding: 10px;
+    color: #64748b;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+  .stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .stat {
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 8px 9px;
+    font-size: 12px;
+  }
+  .stat b {
+    display: block;
+    margin-top: 2px;
+    font-size: 15px;
+  }
+  .condition {
+    margin-top: 10px;
+    padding: 10px;
+    background: #fffbea;
+    border: 1px solid #fde68a;
+    border-radius: 10px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .legend {
+    margin-top: 8px;
+    color: #64748b;
+    font-size: 12px;
+  }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="topbar-text">
+      <h1>사각형 길이·각 조절기</h1>
+      <p class="subtitle">처음에는 무작위 사각형이 나타납니다. 꼭짓점을 직접 드래그하거나, 필요한 항목을 펼쳐 길이·각·평행 조건을 조절해 보세요.</p>
+    </div>
+    <button id="downloadProgramBtn" class="download-btn" type="button">💾 프로그램 다운로드</button>
+  </div>
+
+  <div class="layout">
+    <div class="card canvas-card">
+      <svg id="svg" viewBox="0 0 900 675">
+        <defs>
+          <pattern id="gridPattern" width="25" height="25" patternUnits="userSpaceOnUse">
+            <path d="M 25 0 L 0 0 0 25" fill="none" stroke="#eef2f7" stroke-width="1"/>
+          </pattern>
+        </defs>
+        <rect id="grid" x="0" y="0" width="900" height="675" fill="url(#gridPattern)"></rect>
+        <g id="diagLayer"></g>
+        <g id="shapeLayer"></g>
+        <g id="parallelLayer"></g>
+        <g id="angleLayer"></g>
+        <g id="measureLayer"></g>
+        <g id="pointLayer"></g>
+      </svg>
+    </div>
+
+    <div class="card panel">
+      <div class="section">
+        <details>
+          <summary>① 변의 길이 조절</summary>
+          <div class="section-body">
+        <label>조절할 변</label>
+        <div class="choice-group" id="sideButtons">
+          <button type="button" class="choice-btn active" data-side="0">AB</button>
+          <button type="button" class="choice-btn" data-side="1">BC</button>
+          <button type="button" class="choice-btn" data-side="2">CD</button>
+          <button type="button" class="choice-btn" data-side="3">DA</button>
+        </div>
+        <div class="row">
+          <label>길이</label>
+          <input id="sideRange" type="range" min="50" max="420" step="1">
+          <input id="sideNumber" type="number" min="50" max="420" step="1">
+        </div>
+        <div class="hint">
+          선택한 변의 길이를 바꾸면 <b>나머지 세 변의 길이는 그대로 유지</b>되고,
+          사각형의 각도들이 변합니다.
+        </div>
+          </div>
+        </details>
+      </div>
+
+      <div class="section">
+        <details>
+          <summary>② 각의 크기 조절</summary>
+          <div class="section-body">
+        <label>조절할 각</label>
+        <div class="choice-group" id="angleButtons">
+          <button type="button" class="choice-btn active" data-angle="0">∠A</button>
+          <button type="button" class="choice-btn" data-angle="1">∠B</button>
+          <button type="button" class="choice-btn" data-angle="2">∠C</button>
+          <button type="button" class="choice-btn" data-angle="3">∠D</button>
+        </div>
+        <div class="row">
+          <label>각도</label>
+          <input id="angleRange" type="range" min="10" max="170" step="1">
+          <input id="angleNumber" type="number" min="10" max="170" step="1">
+        </div>
+        <div class="hint">
+          선택한 각의 크기를 바꾸면 <b>맞은편 각의 크기는 그대로 유지</b>됩니다.
+          대신 양옆의 두 각과 일부 변의 길이가 함께 변합니다.
+        </div>
+          </div>
+        </details>
+      </div>
+
+      <div class="section">
+        <details>
+          <summary>③ 대변을 평행하게 만들기</summary>
+          <div class="section-body">
+        <div class="btns">
+          <button id="parallelABCD">AB ∥ CD</button>
+          <button id="parallelBCDA">BC ∥ DA</button>
+        </div>
+        <div class="hint" style="margin-top:8px;">
+          버튼을 누르면 해당하는 한 쌍의 대변만 평행하게 맞춥니다.
+          약 1초 동안 움직이는 과정을 관찰할 수 있습니다.
+          움직이는 변의 길이는 그대로 유지됩니다.
+        </div>
+          </div>
+        </details>
+      </div>
+
+      <div class="section">
+        <details>
+          <summary>④ 표시 설정</summary>
+          <div class="section-body">
+        <div class="checks">
+          <label><input id="showLengths" type="checkbox" checked> 변 길이 표시</label>
+          <label><input id="showAngles" type="checkbox" checked> 각도 표시</label>
+          <label><input id="showDiagonals" type="checkbox"> 대각선 표시</label>
+          <label><input id="showGrid" type="checkbox" checked> 격자 표시</label>
+        </div>
+          </div>
+        </details>
+      </div>
+
+      <div class="section">
+        <details>
+          <summary>⑤ 빠른 모양</summary>
+          <div class="section-body">
+        <div class="btns">
+          <button id="resetBtn" class="primary">처음 모양</button>
+          <button id="randomBtn">무작위 사각형</button>
+          <button id="paraBtn">평행사변형</button>
+          <button id="rectBtn">직사각형</button>
+        </div>
+          </div>
+        </details>
+      </div>
+
+      <div class="section">
+        <h2>현재 측정값</h2>
+        <div id="stats" class="stats"></div>
+        <div id="conditionBox" class="condition"></div>
+        <div class="legend">※ 판정은 화면상 측정값을 기준으로 약간의 오차를 허용합니다.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SVG_NS = "http://www.w3.org/2000/svg";
+const svg = document.getElementById("svg");
+const grid = document.getElementById("grid");
+const diagLayer = document.getElementById("diagLayer");
+const shapeLayer = document.getElementById("shapeLayer");
+const parallelLayer = document.getElementById("parallelLayer");
+const angleLayer = document.getElementById("angleLayer");
+const measureLayer = document.getElementById("measureLayer");
+const pointLayer = document.getElementById("pointLayer");
+
+const sideButtons = [...document.querySelectorAll("[data-side]")];
+const angleButtons = [...document.querySelectorAll("[data-angle]")];
+const sideRange = document.getElementById("sideRange");
+const sideNumber = document.getElementById("sideNumber");
+const angleRange = document.getElementById("angleRange");
+const angleNumber = document.getElementById("angleNumber");
+
+let selectedSide = 0;
+let selectedAngle = 0;
+
+const showLengths = document.getElementById("showLengths");
+const showAngles = document.getElementById("showAngles");
+const showDiagonals = document.getElementById("showDiagonals");
+const showGrid = document.getElementById("showGrid");
+
+const stats = document.getElementById("stats");
+const conditionBox = document.getElementById("conditionBox");
+
+let P = [
+  {x:220,y:180}, // A
+  {x:610,y:190}, // B
+  {x:690,y:470}, // C
+  {x:300,y:460}  // D
+];
+
+const names = ["A","B","C","D"];
+
+function el(tag, attrs={}) {
+  const n = document.createElementNS(SVG_NS, tag);
+  for (const [k,v] of Object.entries(attrs)) n.setAttribute(k,v);
+  return n;
+}
+function dist(a,b){ return Math.hypot(b.x-a.x,b.y-a.y); }
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+function rad(d){ return d*Math.PI/180; }
+function deg(r){ return r*180/Math.PI; }
+function normAngle(a){
+  while(a <= -Math.PI) a += 2*Math.PI;
+  while(a > Math.PI) a -= 2*Math.PI;
+  return a;
+}
+function interiorAngle(prev,cur,next){
+  const a = Math.atan2(prev.y-cur.y, prev.x-cur.x);
+  const b = Math.atan2(next.y-cur.y, next.x-cur.x);
+  return Math.abs(deg(normAngle(b-a)));
+}
+function cross(a,b,c){
+  return (b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);
+}
+function isConvex(){
+  const signs=[];
+  for(let i=0;i<4;i++){
+    const z=cross(P[i],P[(i+1)%4],P[(i+2)%4]);
+    if(Math.abs(z)>1e-8) signs.push(Math.sign(z));
+  }
+  return signs.every(s=>s===signs[0]);
+}
+function lineParallel(a,b,c,d){
+  const ux=b.x-a.x, uy=b.y-a.y;
+  const vx=d.x-c.x, vy=d.y-c.y;
+  const den=Math.hypot(ux,uy)*Math.hypot(vx,vy);
+  if(!den) return false;
+
+  // 평행 판정 허용 오차를 조금 더 엄격하게 설정
+  // 약 1.1° 이내일 때만 평행 기호가 나타남
+  return Math.abs(ux*vy-uy*vx)/den < 0.02;
+}
+function midpoint(a,b){ return {x:(a.x+b.x)/2,y:(a.y+b.y)/2}; }
+
+
+function circleIntersections(c0,r0,c1,r1){
+  const dx=c1.x-c0.x, dy=c1.y-c0.y;
+  const d=Math.hypot(dx,dy);
+  if(d < 1e-9) return [];
+  if(d > r0+r1+1e-7) return [];
+  if(d < Math.abs(r0-r1)-1e-7) return [];
+
+  const a=(r0*r0-r1*r1+d*d)/(2*d);
+  const h2=Math.max(0,r0*r0-a*a);
+  const h=Math.sqrt(h2);
+
+  const x2=c0.x+a*dx/d;
+  const y2=c0.y+a*dy/d;
+  const rx=-dy*(h/d);
+  const ry= dx*(h/d);
+
+  if(h < 1e-8) return [{x:x2,y:y2}];
+  return [
+    {x:x2+rx,y:y2+ry},
+    {x:x2-rx,y:y2-ry}
+  ];
+}
+
+function polygonArea(pts){
+  let s=0;
+  for(let i=0;i<pts.length;i++){
+    const a=pts[i], b=pts[(i+1)%pts.length];
+    s += a.x*b.y-a.y*b.x;
+  }
+  return s/2;
+}
+
+function isConvexPoints(pts){
+  const signs=[];
+  for(let i=0;i<4;i++){
+    const z=cross(pts[i],pts[(i+1)%4],pts[(i+2)%4]);
+    if(Math.abs(z)>1e-8) signs.push(Math.sign(z));
+  }
+  return signs.length===4 && signs.every(s=>s===signs[0]);
+}
+
+function rotateVector(vx,vy,a){
+  const c=Math.cos(a), s=Math.sin(a);
+  return {x:vx*c-vy*s, y:vx*s+vy*c};
+}
+
+function unitVector(a,b){
+  const dx=b.x-a.x, dy=b.y-a.y;
+  const L=Math.hypot(dx,dy) || 1;
+  return {x:dx/L,y:dy/L};
+}
+
+function directionDifference(u,v){
+  const dot=Math.max(-1,Math.min(1,u.x*v.x+u.y*v.y));
+  return Math.acos(dot);
+}
+
+function rayIntersection(p,r,q,s){
+  const den=r.x*s.y-r.y*s.x;
+  if(Math.abs(den)<1e-9) return null;
+  const qpx=q.x-p.x, qpy=q.y-p.y;
+  const t=(qpx*s.y-qpy*s.x)/den;
+  const u=(qpx*r.y-qpy*r.x)/den;
+  return {x:p.x+t*r.x,y:p.y+t*r.y,t,u};
+}
+
+function sideFeasibleRange(sideIndex){
+  const i=sideIndex;
+  const j=(i+1)%4;
+  const k=(i+2)%4;
+  const d=dist(P[i],P[k]);
+  const nextLen=dist(P[j],P[k]);
+  return {
+    min: Math.max(20, Math.abs(d-nextLen)+1),
+    max: Math.min(600, d+nextLen-1)
+  };
+}
+
+function angleFeasibleRange(vertexIndex){
+  return {min:10,max:170};
+}
+
+function setLength(sideIndex, newLen){
+  const i=sideIndex;
+  const j=(i+1)%4;
+  const k=(i+2)%4;
+
+  // i, k 및 나머지 한 꼭짓점은 고정하고 j만 이동한다.
+  // 그러면 선택한 변을 제외한 세 변의 길이가 정확히 유지된다.
+  const range=sideFeasibleRange(i);
+  const L=clamp(Number(newLen),range.min,range.max);
+  const fixedNextLen=dist(P[j],P[k]);
+  const candidates=circleIntersections(P[i],L,P[k],fixedNextLen);
+  if(!candidates.length) return;
+
+  const old=P[j];
+  const oldArea=polygonArea(P);
+
+  let best=null, bestScore=Infinity;
+  for(const c of candidates){
+    const q=P.map(p=>({x:p.x,y:p.y}));
+    q[j]=c;
+    let score=dist(c,old);
+
+    // 기존과 같은 방향의 볼록사각형을 우선한다.
+    if(!isConvexPoints(q)) score += 100000;
+    if(oldArea!==0 && polygonArea(q)*oldArea<0) score += 50000;
+
+    if(score<bestScore){
+      bestScore=score;
+      best=c;
+    }
+  }
+
+  if(best){
+    P[j]={x:best.x,y:best.y};
+    render();
+  }
+}
+
+function setAngle(vertexIndex, targetDeg){
+  const i=vertexIndex;
+  const j=(i+1)%4;   // 움직일 꼭짓점
+  const k=(i+2)%4;   // 맞은편 꼭짓점
+  const l=(i+3)%4;   // 고정할 이전 꼭짓점
+
+  if(!isConvex()){
+    return;
+  }
+
+  const oldP=P.map(p=>({x:p.x,y:p.y}));
+  const oldArea=polygonArea(oldP);
+  const target=clamp(Number(targetDeg),10,170);
+
+  const cur=P[i];
+  const opp=P[k];
+  const prev=P[l];
+  const oldNext=P[j];
+
+  // 맞은편 각은 현재 값 그대로 유지
+  const fixedOppAngle=interiorAngle(oldNext,opp,prev);
+
+  // 선택한 꼭짓점에서, 이전 변 방향을 기준으로 target°를 만드는 두 후보 광선
+  const baseAtCur=unitVector(cur,prev);
+  const targetRays=[
+    rotateVector(baseAtCur.x,baseAtCur.y, rad(target)),
+    rotateVector(baseAtCur.x,baseAtCur.y,-rad(target))
+  ];
+
+  // 맞은편 꼭짓점에서, 고정된 변(opp->prev)을 기준으로
+  // 기존 맞은편 각을 그대로 만드는 두 후보 광선
+  const baseAtOpp=unitVector(opp,prev);
+  const oppRays=[
+    rotateVector(baseAtOpp.x,baseAtOpp.y, rad(fixedOppAngle)),
+    rotateVector(baseAtOpp.x,baseAtOpp.y,-rad(fixedOppAngle))
+  ];
+
+  let best=null;
+  let bestScore=Infinity;
+
+  for(const r1 of targetRays){
+    for(const r2 of oppRays){
+      const inter=rayIntersection(cur,r1,opp,r2);
+      if(!inter || inter.t<=1e-4 || inter.u<=1e-4) continue;
+
+      const q=oldP.map(p=>({x:p.x,y:p.y}));
+      q[j]={x:inter.x,y:inter.y};
+
+      let score=dist(q[j],oldNext);
+
+      // 기존의 볼록성과 방향을 우선 유지
+      if(!isConvexPoints(q)) score += 100000;
+      if(oldArea!==0 && polygonArea(q)*oldArea<0) score += 50000;
+
+      // 화면 밖으로 크게 벗어나는 해는 피함
+      if(q[j].x<20 || q[j].x>880 || q[j].y<20 || q[j].y>655){
+        score += 5000;
+      }
+
+      if(score<bestScore){
+        bestScore=score;
+        best=q;
+      }
+    }
+  }
+
+  if(best){
+    P=best;
+    render();
+  }
+}
+
+function addText(x,y,text,attrs={}){
+  const t=el("text",{x,y,...attrs});
+  t.textContent=text;
+  measureLayer.appendChild(t);
+  return t;
+}
+
+function drawAngleArc(prev,cur,next,index){
+  const r=34;
+  let a1=Math.atan2(prev.y-cur.y,prev.x-cur.x);
+  let a2=Math.atan2(next.y-cur.y,next.x-cur.x);
+  let diff=normAngle(a2-a1);
+
+  // 작은 각(0~180)을 사용
+  if(diff<0){ const tmp=a1; a1=a2; a2=tmp; diff=-diff; }
+  if(diff>Math.PI){
+    const tmp=a1; a1=a2; a2=tmp;
+    diff=2*Math.PI-diff;
+  }
+
+  const sx=cur.x+r*Math.cos(a1), sy=cur.y+r*Math.sin(a1);
+  const ex=cur.x+r*Math.cos(a1+diff), ey=cur.y+r*Math.sin(a1+diff);
+  const path=el("path",{
+    d:`M ${sx} ${sy} A ${r} ${r} 0 0 1 ${ex} ${ey}`,
+    fill:"none", stroke:"#f59e0b", "stroke-width":"3"
+  });
+  angleLayer.appendChild(path);
+
+  const mid=a1+diff/2;
+  const tx=cur.x+(r+24)*Math.cos(mid);
+  const ty=cur.y+(r+24)*Math.sin(mid);
+  const angle=Math.round(interiorAngle(prev,cur,next));
+  const tt=el("text",{
+    x:tx,y:ty,
+    "font-size":"16",
+    "font-weight":"700",
+    "text-anchor":"middle",
+    "dominant-baseline":"middle",
+    fill:"#b45309",
+    "paint-order":"stroke",
+    stroke:"white",
+    "stroke-width":"4"
+  });
+  tt.textContent=`${angle}°`;
+  angleLayer.appendChild(tt);
+}
+
+
+function drawParallelMark(a,b,count=1){
+  const dx=b.x-a.x, dy=b.y-a.y;
+  const L=Math.hypot(dx,dy);
+  if(L < 1) return;
+
+  const ux=dx/L, uy=dy/L;
+  const nx=-uy, ny=ux;
+  const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+
+  // 서로 다른 대변 쌍을 한 개/두 개의 화살표 표시로 구분
+  const spacing=18;
+  const offsets = count===1 ? [0] : [-spacing/2, spacing/2];
+
+  offsets.forEach(off=>{
+    const cx=mx + ux*off;
+    const cy=my + uy*off;
+    const back=10;
+    const wing=7;
+
+    const p1={x:cx-ux*back+nx*wing, y:cy-uy*back+ny*wing};
+    const p2={x:cx, y:cy};
+    const p3={x:cx-ux*back-nx*wing, y:cy-uy*back-ny*wing};
+
+    const path=el("path",{
+      d:`M ${p1.x} ${p1.y} L ${p2.x} ${p2.y} L ${p3.x} ${p3.y}`,
+      fill:"none",
+      stroke:"#7c3aed",
+      "stroke-width":"4",
+      "stroke-linecap":"round",
+      "stroke-linejoin":"round",
+      "paint-order":"stroke",
+      style:"pointer-events:none"
+    });
+    parallelLayer.appendChild(path);
+  });
+}
+
+function drawParallelIndicators(){
+  const ab_cd = lineParallel(P[0],P[1],P[3],P[2]);
+  const bc_da = lineParallel(P[1],P[2],P[0],P[3]);
+
+  if(ab_cd){
+    drawParallelMark(P[0],P[1],1);
+    drawParallelMark(P[3],P[2],1);
+  }
+  if(bc_da){
+    drawParallelMark(P[1],P[2],2);
+    drawParallelMark(P[0],P[3],2);
+  }
+}
+
+
+function segmentIntersection(a,b,c,d){
+  const r={x:b.x-a.x, y:b.y-a.y};
+  const s={x:d.x-c.x, y:d.y-c.y};
+  const den=r.x*s.y-r.y*s.x;
+  if(Math.abs(den)<1e-9) return null;
+
+  const qpx=c.x-a.x, qpy=c.y-a.y;
+  const t=(qpx*s.y-qpy*s.x)/den;
+  const u=(qpx*r.y-qpy*r.x)/den;
+
+  if(t < 0 || t > 1 || u < 0 || u > 1) return null;
+
+  return {
+    x:a.x+t*r.x,
+    y:a.y+t*r.y
+  };
+}
+
+function drawDiagonalMeasurements(){
+  const O=segmentIntersection(P[0],P[2],P[1],P[3]);
+  if(!O) return;
+
+  // 교점 O 표시
+  const dot=el("circle",{
+    cx:O.x, cy:O.y, r:"6",
+    fill:"#7c3aed",
+    stroke:"white",
+    "stroke-width":"2"
+  });
+  diagLayer.appendChild(dot);
+
+  const oLabel=el("text",{
+    x:O.x+11, y:O.y-10,
+    "font-size":"17",
+    "font-weight":"800",
+    fill:"#6d28d9",
+    "paint-order":"stroke",
+    stroke:"white",
+    "stroke-width":"4"
+  });
+  oLabel.textContent="O";
+  diagLayer.appendChild(oLabel);
+
+  const parts=[
+    {p:P[0], name:"OA"},
+    {p:P[1], name:"OB"},
+    {p:P[2], name:"OC"},
+    {p:P[3], name:"OD"}
+  ];
+
+  parts.forEach(({p,name})=>{
+    const dx=O.x-p.x, dy=O.y-p.y;
+    const L=Math.hypot(dx,dy) || 1;
+    const nx=-dy/L, ny=dx/L;
+
+    // 꼭짓점과 교점 사이의 중간 지점에 거리 표시
+    const mx=(p.x+O.x)/2;
+    const my=(p.y+O.y)/2;
+    const offset=18;
+
+    const t=el("text",{
+      x:mx+nx*offset,
+      y:my+ny*offset,
+      "font-size":"15",
+      "font-weight":"700",
+      "text-anchor":"middle",
+      "dominant-baseline":"middle",
+      fill:"#6d28d9",
+      "paint-order":"stroke",
+      stroke:"white",
+      "stroke-width":"5"
+    });
+    t.textContent=`${name} = ${Math.round(dist(p,O))}`;
+    diagLayer.appendChild(t);
+  });
+}
+
+function render(){
+  shapeLayer.innerHTML="";
+  diagLayer.innerHTML="";
+  parallelLayer.innerHTML="";
+  angleLayer.innerHTML="";
+  measureLayer.innerHTML="";
+  pointLayer.innerHTML="";
+
+  grid.style.display = showGrid.checked ? "" : "none";
+
+  const poly=el("polygon",{
+    points:P.map(p=>`${p.x},${p.y}`).join(" "),
+    fill:"#dff4ff",
+    "fill-opacity":"0.82",
+    stroke:"#1296db",
+    "stroke-width":"5",
+    "stroke-linejoin":"round"
+  });
+  shapeLayer.appendChild(poly);
+
+  // 대변이 실제로 평행할 때 교과서식 화살표 표시
+  drawParallelIndicators();
+
+  if(showDiagonals.checked){
+    [[0,2],[1,3]].forEach(([i,j])=>{
+      diagLayer.appendChild(el("line",{
+        x1:P[i].x,y1:P[i].y,x2:P[j].x,y2:P[j].y,
+        stroke:"#64748b","stroke-width":"3","stroke-dasharray":"8 7"
+      }));
+    });
+
+    drawDiagonalMeasurements();
+  }
+
+  if(showLengths.checked){
+    for(let i=0;i<4;i++){
+      const a=P[i],b=P[(i+1)%4];
+      const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+      const dx=b.x-a.x,dy=b.y-a.y;
+      const L=Math.hypot(dx,dy)||1;
+      const nx=-dy/L, ny=dx/L;
+      addText(mx+nx*22,my+ny*22,Math.round(L),{
+        "font-size":"16","font-weight":"700","text-anchor":"middle",
+        "dominant-baseline":"middle",fill:"#0f766e",
+        "paint-order":"stroke",stroke:"white","stroke-width":"5"
+      });
+    }
+  }
+
+  if(showAngles.checked){
+    for(let i=0;i<4;i++){
+      drawAngleArc(P[(i+3)%4],P[i],P[(i+1)%4],i);
+    }
+  }
+
+  P.forEach((p,i)=>{
+    const c=el("circle",{
+      cx:p.x,cy:p.y,r:"12",fill:"#ffffff",stroke:"#1d4ed8","stroke-width":"4",
+      style:"cursor:grab"
+    });
+    c.dataset.index=i;
+    pointLayer.appendChild(c);
+
+    const t=el("text",{
+      x:p.x+16,y:p.y-15,"font-size":"20","font-weight":"800",fill:"#111827",
+      "paint-order":"stroke",stroke:"white","stroke-width":"5"
+    });
+    t.textContent=names[i];
+    pointLayer.appendChild(t);
+  });
+
+  syncControls();
+  updateStats();
+}
+
+function syncControls(){
+  const si=selectedSide;
+  const sr=sideFeasibleRange(si);
+  sideRange.min=Math.ceil(sr.min);
+  sideRange.max=Math.floor(sr.max);
+  sideNumber.min=Math.ceil(sr.min);
+  sideNumber.max=Math.floor(sr.max);
+
+  const sl=Math.round(dist(P[si],P[(si+1)%4]));
+  sideRange.value=clamp(sl,+sideRange.min,+sideRange.max);
+  sideNumber.value=sl;
+
+  const ai=selectedAngle;
+  const ar=angleFeasibleRange(ai);
+  angleRange.min=Math.ceil(ar.min);
+  angleRange.max=Math.floor(ar.max);
+  angleNumber.min=Math.ceil(ar.min);
+  angleNumber.max=Math.floor(ar.max);
+
+  const ang=Math.round(interiorAngle(P[(ai+3)%4],P[ai],P[(ai+1)%4]));
+  angleRange.value=clamp(ang,+angleRange.min,+angleRange.max);
+  angleNumber.value=ang;
+}
+
+function updateStats(){
+  const lengths=[
+    dist(P[0],P[1]),dist(P[1],P[2]),dist(P[2],P[3]),dist(P[3],P[0])
+  ];
+  const angles=P.map((_,i)=>interiorAngle(P[(i+3)%4],P[i],P[(i+1)%4]));
+  const labels=["AB","BC","CD","DA"];
+  stats.innerHTML="";
+  labels.forEach((lab,i)=>{
+    const d=document.createElement("div");
+    d.className="stat";
+    d.innerHTML=`${lab}<b>${Math.round(lengths[i])}</b>`;
+    stats.appendChild(d);
+  });
+  angles.forEach((a,i)=>{
+    const d=document.createElement("div");
+    d.className="stat";
+    d.innerHTML=`∠${names[i]}<b>${Math.round(a)}°</b>`;
+    stats.appendChild(d);
+  });
+
+  const tolLen=6;
+  const tolAng=3;
+  const oppSides =
+    Math.abs(lengths[0]-lengths[2])<tolLen &&
+    Math.abs(lengths[1]-lengths[3])<tolLen;
+
+  const oppAngles =
+    Math.abs(angles[0]-angles[2])<tolAng &&
+    Math.abs(angles[1]-angles[3])<tolAng;
+
+  const mAC=midpoint(P[0],P[2]);
+  const mBD=midpoint(P[1],P[3]);
+  const diagBisect=dist(mAC,mBD)<7;
+
+  const onePair =
+    (lineParallel(P[0],P[1],P[3],P[2]) && Math.abs(lengths[0]-lengths[2])<tolLen) ||
+    (lineParallel(P[1],P[2],P[0],P[3]) && Math.abs(lengths[1]-lengths[3])<tolLen);
+
+  let found=[];
+  if(oppSides) found.push("두 쌍의 대변의 길이가 각각 같음");
+  if(oppAngles) found.push("두 쌍의 대각의 크기가 각각 같음");
+  if(diagBisect) found.push("두 대각선이 서로를 이등분함");
+  if(onePair) found.push("한 쌍의 대변이 평행하고 길이가 같음");
+
+  const para =
+    lineParallel(P[0],P[1],P[3],P[2]) &&
+    lineParallel(P[1],P[2],P[0],P[3]);
+
+  if(!isConvex()){
+    conditionBox.innerHTML="<b>현재 모양:</b> 오목하거나 교차된 사각형일 수 있습니다.<br>꼭짓점을 옮겨 볼록한 사각형으로 만들어 보세요.";
+  } else if(para){
+    conditionBox.innerHTML="<b>현재 모양:</b> 평행사변형입니다.<br>" +
+      (found.length ? "확인되는 조건: " + found.join(", ") : "");
+  } else if(found.length){
+    conditionBox.innerHTML="<b>확인되는 조건:</b><br>" + found.join("<br>");
+  } else {
+    conditionBox.innerHTML="<b>현재 모양:</b> 일반 사각형입니다.<br>꼭짓점을 움직이며 평행사변형이 되는 조건을 찾아보세요.";
+  }
+}
+
+
+
+let parallelAnimationId = null;
+
+function easeInOutCubic(t){
+  return t < 0.5
+    ? 4*t*t*t
+    : 1 - Math.pow(-2*t + 2, 3)/2;
+}
+
+function animateVertexTo(index, target, duration=1000){
+  if(parallelAnimationId !== null){
+    cancelAnimationFrame(parallelAnimationId);
+    parallelAnimationId = null;
+  }
+
+  const start = {x:P[index].x, y:P[index].y};
+  const startTime = performance.now();
+
+  function step(now){
+    const raw = Math.min(1, (now-startTime)/duration);
+    const t = easeInOutCubic(raw);
+
+    P[index] = {
+      x: start.x + (target.x-start.x)*t,
+      y: start.y + (target.y-start.y)*t
+    };
+    render();
+
+    if(raw < 1){
+      parallelAnimationId = requestAnimationFrame(step);
+    } else {
+      P[index] = {x:target.x, y:target.y};
+      parallelAnimationId = null;
+      render();
+    }
+  }
+
+  parallelAnimationId = requestAnimationFrame(step);
+}
+
+function makeOppositeSidesParallel(pair){
+  let targetD = null;
+
+  if(pair === "AB_CD"){
+    // AB는 그대로 두고, CD의 길이를 유지한 채 D를 이동
+    const lenCD = dist(P[2], P[3]);
+    const ux = (P[1].x - P[0].x) / (dist(P[0],P[1]) || 1);
+    const uy = (P[1].y - P[0].y) / (dist(P[0],P[1]) || 1);
+
+    const c1 = {x:P[2].x + ux*lenCD, y:P[2].y + uy*lenCD};
+    const c2 = {x:P[2].x - ux*lenCD, y:P[2].y - uy*lenCD};
+
+    const candidates = [c1,c2];
+    let best = candidates[0], bestScore = Infinity;
+
+    for(const c of candidates){
+      const q = P.map(p=>({x:p.x,y:p.y}));
+      q[3] = c;
+      let score = dist(c,P[3]);
+      if(!isConvexPoints(q)) score += 100000;
+      if(c.x<25 || c.x>875 || c.y<25 || c.y>650) score += 5000;
+      if(score < bestScore){
+        bestScore = score;
+        best = c;
+      }
+    }
+    targetD = best;
+  }
+
+  if(pair === "BC_DA"){
+    // BC는 그대로 두고, DA의 길이를 유지한 채 D를 이동
+    const lenDA = dist(P[3], P[0]);
+    const ux = (P[2].x - P[1].x) / (dist(P[1],P[2]) || 1);
+    const uy = (P[2].y - P[1].y) / (dist(P[1],P[2]) || 1);
+
+    const c1 = {x:P[0].x + ux*lenDA, y:P[0].y + uy*lenDA};
+    const c2 = {x:P[0].x - ux*lenDA, y:P[0].y - uy*lenDA};
+
+    const candidates = [c1,c2];
+    let best = candidates[0], bestScore = Infinity;
+
+    for(const c of candidates){
+      const q = P.map(p=>({x:p.x,y:p.y}));
+      q[3] = c;
+      let score = dist(c,P[3]);
+      if(!isConvexPoints(q)) score += 100000;
+      if(c.x<25 || c.x>875 || c.y<25 || c.y>650) score += 5000;
+      if(score < bestScore){
+        bestScore = score;
+        best = c;
+      }
+    }
+    targetD = best;
+  }
+
+  if(targetD){
+    animateVertexTo(3, targetD, 1000);
+  }
+}
+
+// 드래그
+let dragging=null;
+
+function clientToSvg(evt){
+  const pt=svg.createSVGPoint();
+  pt.x=evt.clientX; pt.y=evt.clientY;
+  return pt.matrixTransform(svg.getScreenCTM().inverse());
+}
+
+svg.addEventListener("pointerdown",e=>{
+  const target=e.target.closest("circle[data-index]");
+  if(!target) return;
+  dragging=+target.dataset.index;
+  target.setPointerCapture?.(e.pointerId);
+  e.preventDefault();
+});
+
+svg.addEventListener("pointermove",e=>{
+  if(dragging===null) return;
+  const q=clientToSvg(e);
+  P[dragging]={x:clamp(q.x,30,870),y:clamp(q.y,30,645)};
+  render();
+});
+
+svg.addEventListener("pointerup",()=>dragging=null);
+svg.addEventListener("pointercancel",()=>dragging=null);
+
+sideButtons.forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    selectedSide = +btn.dataset.side;
+    sideButtons.forEach(b=>b.classList.toggle("active", b===btn));
+    syncControls();
+  });
+});
+
+angleButtons.forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    selectedAngle = +btn.dataset.angle;
+    angleButtons.forEach(b=>b.classList.toggle("active", b===btn));
+    syncControls();
+  });
+});
+
+sideRange.addEventListener("input",()=>setLength(selectedSide,+sideRange.value));
+sideNumber.addEventListener("change",()=>setLength(selectedSide,+sideNumber.value));
+
+angleRange.addEventListener("input",()=>setAngle(selectedAngle,+angleRange.value));
+angleNumber.addEventListener("change",()=>setAngle(selectedAngle,+angleNumber.value));
+
+[showLengths,showAngles,showDiagonals,showGrid].forEach(x=>x.addEventListener("change",render));
+
+document.getElementById("resetBtn").addEventListener("click",()=>{
+  P=[{x:220,y:180},{x:610,y:190},{x:690,y:470},{x:300,y:460}];
+  render();
+});
+
+function setRandomQuadrilateral(){
+  // 화면 중앙을 중심으로 각도순으로 점을 생성해 대체로 볼록한 무작위 사각형을 만듦
+  const cx=450,cy=335;
+  const angles=[-2.5,-0.8,0.7,2.35];
+  P=angles.map(a=>{
+    const r=170+Math.random()*110;
+    return {
+      x:clamp(cx+Math.cos(a)*r + (Math.random()-0.5)*45,50,850),
+      y:clamp(cy+Math.sin(a)*r + (Math.random()-0.5)*45,50,625)
+    };
+  });
+}
+
+document.getElementById("randomBtn").addEventListener("click",()=>{
+  setRandomQuadrilateral();
+  render();
+});
+
+document.getElementById("paraBtn").addEventListener("click",()=>{
+  const A={x:230,y:210}, B={x:600,y:210}, D={x:330,y:470};
+  const C={x:B.x+D.x-A.x,y:B.y+D.y-A.y};
+  P=[A,B,C,D];
+  render();
+});
+
+document.getElementById("rectBtn").addEventListener("click",()=>{
+  P=[{x:220,y:190},{x:650,y:190},{x:650,y:470},{x:220,y:470}];
+  render();
+});
+
+document.getElementById("parallelABCD").addEventListener("click",()=>{
+  makeOppositeSidesParallel("AB_CD");
+});
+
+document.getElementById("parallelBCDA").addEventListener("click",()=>{
+  makeOppositeSidesParallel("BC_DA");
+});
+
+document.getElementById("downloadProgramBtn").addEventListener("click",()=>{
+  try{
+    const source="<!doctype html>\n"+document.documentElement.outerHTML;
+    const blob=new Blob([source],{type:"text/html;charset=utf-8"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;
+    a.download="사각형_길이_각_조절기.html";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }catch(err){
+    alert("다운로드를 시작하지 못했습니다. 브라우저의 다운로드 권한을 확인해 주세요.");
+  }
+});
+
+setRandomQuadrilateral();
+render();
+</script>
+</body>
+</html>
