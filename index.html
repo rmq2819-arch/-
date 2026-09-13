@@ -331,13 +331,47 @@
 
       <div class="section">
         <details>
-          <summary>④ 표시 설정</summary>
+          <summary>④ 대각선 조절</summary>
+          <div class="section-body">
+            <label>길이를 조절할 선분</label>
+            <div class="choice-group" id="halfDiagonalButtons">
+              <button type="button" class="choice-btn active" data-half-diagonal="0">AO</button>
+              <button type="button" class="choice-btn" data-half-diagonal="1">BO</button>
+              <button type="button" class="choice-btn" data-half-diagonal="2">CO</button>
+              <button type="button" class="choice-btn" data-half-diagonal="3">DO</button>
+            </div>
+
+            <div class="row">
+              <label>선분 길이</label>
+              <input id="halfDiagonalRange" type="range" min="20" max="500" step="1">
+              <input id="halfDiagonalNumber" type="number" min="20" max="500" step="1">
+            </div>
+
+            <div class="row">
+              <label>두 대각선의 각</label>
+              <input id="diagonalAngleRange" type="range" min="10" max="170" step="1">
+              <input id="diagonalAngleNumber" type="number" min="10" max="170" step="1">
+            </div>
+
+            <div class="hint">
+              <b>AO, BO, CO, DO</b> 중 하나를 선택해 길이를 따로 조절할 수 있습니다.
+              선분의 길이를 바꿀 때는 교점 O와 두 대각선이 이루는 각은 그대로 유지됩니다.
+              두 대각선의 각을 조절할 때는 <b>AC를 고정하고 BD가 교점 O를 중심으로 회전</b>합니다.
+              조절을 시작하면 대각선 표시가 자동으로 켜집니다.
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <div class="section">
+        <details>
+          <summary>⑤ 표시 설정</summary>
           <div class="section-body">
         <div class="checks">
           <label><input id="showLengths" type="checkbox" checked> 변 길이 표시</label>
-          <label><input id="showAngles" type="checkbox" checked> 각도 표시</label>
+          <label><input id="showAngles" type="checkbox"> 각도 표시</label>
           <label><input id="showDiagonals" type="checkbox"> 대각선 표시</label>
-          <label><input id="showGrid" type="checkbox" checked> 격자 표시</label>
+          <label><input id="showGrid" type="checkbox"> 격자 표시</label>
         </div>
           </div>
         </details>
@@ -345,13 +379,15 @@
 
       <div class="section">
         <details>
-          <summary>⑤ 빠른 모양</summary>
+          <summary>⑥ 빠른 모양</summary>
           <div class="section-body">
         <div class="btns">
           <button id="resetBtn" class="primary">처음 모양</button>
           <button id="randomBtn">무작위 사각형</button>
           <button id="paraBtn">평행사변형</button>
           <button id="rectBtn">직사각형</button>
+          <button id="rhombusBtn">마름모</button>
+          <button id="squareBtn">정사각형</button>
         </div>
           </div>
         </details>
@@ -385,8 +421,15 @@ const sideNumber = document.getElementById("sideNumber");
 const angleRange = document.getElementById("angleRange");
 const angleNumber = document.getElementById("angleNumber");
 
+const halfDiagonalButtons = [...document.querySelectorAll("[data-half-diagonal]")];
+const halfDiagonalRange = document.getElementById("halfDiagonalRange");
+const halfDiagonalNumber = document.getElementById("halfDiagonalNumber");
+const diagonalAngleRange = document.getElementById("diagonalAngleRange");
+const diagonalAngleNumber = document.getElementById("diagonalAngleNumber");
+
 let selectedSide = 0;
 let selectedAngle = 0;
+let selectedHalfDiagonal = 0;
 
 const showLengths = document.getElementById("showLengths");
 const showAngles = document.getElementById("showAngles");
@@ -740,6 +783,122 @@ function drawParallelIndicators(){
 }
 
 
+
+function halfDiagonalLength(index){
+  const O=segmentIntersection(P[0],P[2],P[1],P[3]);
+  if(!O) return 0;
+  return dist(P[index],O);
+}
+
+function diagonalAngleDegrees(){
+  const ac={x:P[2].x-P[0].x, y:P[2].y-P[0].y};
+  const bd={x:P[3].x-P[1].x, y:P[3].y-P[1].y};
+  const a1=Math.atan2(ac.y,ac.x);
+  const a2=Math.atan2(bd.y,bd.x);
+  let d=Math.abs(deg(normAngle(a2-a1)));
+  if(d>180) d=360-d;
+  return d;
+}
+
+function rayDistanceToBox(origin, dir){
+  const minX=30, maxX=870, minY=30, maxY=645;
+  const vals=[];
+
+  if(Math.abs(dir.x)>1e-9){
+    const tx1=(minX-origin.x)/dir.x;
+    const tx2=(maxX-origin.x)/dir.x;
+    if(tx1>0) vals.push(tx1);
+    if(tx2>0) vals.push(tx2);
+  }
+  if(Math.abs(dir.y)>1e-9){
+    const ty1=(minY-origin.y)/dir.y;
+    const ty2=(maxY-origin.y)/dir.y;
+    if(ty1>0) vals.push(ty1);
+    if(ty2>0) vals.push(ty2);
+  }
+  return vals.length ? Math.min(...vals) : 600;
+}
+
+function halfDiagonalFeasibleRange(index){
+  const O=segmentIntersection(P[0],P[2],P[1],P[3]);
+  if(!O) return {min:20,max:500};
+
+  const vertex=P[index];
+  const current=dist(O,vertex) || 1;
+  const dir={
+    x:(vertex.x-O.x)/current,
+    y:(vertex.y-O.y)/current
+  };
+
+  const maxLen=Math.max(30,Math.floor(rayDistanceToBox(O,dir)));
+  return {
+    min:20,
+    max:Math.min(600,maxLen)
+  };
+}
+
+function setHalfDiagonalLength(index,newLength){
+  const O=segmentIntersection(P[0],P[2],P[1],P[3]);
+  if(!O) return;
+
+  const vertex=P[index];
+  const oldLen=dist(O,vertex) || 1;
+  const dir={
+    x:(vertex.x-O.x)/oldLen,
+    y:(vertex.y-O.y)/oldLen
+  };
+
+  const range=halfDiagonalFeasibleRange(index);
+  const L=clamp(Number(newLength),range.min,range.max);
+
+  // 선택한 꼭짓점만 O와 같은 직선 위에서 이동한다.
+  // 따라서 다른 AO/BO/CO/DO 길이와 두 대각선이 이루는 각은 그대로 유지된다.
+  P[index]={
+    x:O.x+dir.x*L,
+    y:O.y+dir.y*L
+  };
+
+  showDiagonals.checked=true;
+  render();
+}
+
+function setDiagonalAngle(targetDeg){
+  const O=segmentIntersection(P[0],P[2],P[1],P[3]);
+  if(!O) return;
+
+  const acLen=dist(P[0],P[2]) || 1;
+  const bdLen=dist(P[1],P[3]) || 1;
+
+  const acDir={
+    x:(P[2].x-P[0].x)/acLen,
+    y:(P[2].y-P[0].y)/acLen
+  };
+
+  const currentBD={
+    x:(P[3].x-P[1].x)/bdLen,
+    y:(P[3].y-P[1].y)/bdLen
+  };
+
+  const crossSign=Math.sign(acDir.x*currentBD.y-acDir.y*currentBD.x) || 1;
+  const target=clamp(Number(targetDeg),10,170);
+  const newBD=rotateVector(acDir.x,acDir.y,rad(target*crossSign));
+
+  const rB=dist(P[1],O)/bdLen;
+  const rD=dist(O,P[3])/bdLen;
+
+  P[1]={
+    x:O.x-newBD.x*(bdLen*rB),
+    y:O.y-newBD.y*(bdLen*rB)
+  };
+  P[3]={
+    x:O.x+newBD.x*(bdLen*rD),
+    y:O.y+newBD.y*(bdLen*rD)
+  };
+
+  showDiagonals.checked=true;
+  render();
+}
+
 function segmentIntersection(a,b,c,d){
   const r={x:b.x-a.x, y:b.y-a.y};
   const s={x:d.x-c.x, y:d.y-c.y};
@@ -914,6 +1073,20 @@ function syncControls(){
   const ang=Math.round(interiorAngle(P[(ai+3)%4],P[ai],P[(ai+1)%4]));
   angleRange.value=clamp(ang,+angleRange.min,+angleRange.max);
   angleNumber.value=ang;
+
+  const hdr=halfDiagonalFeasibleRange(selectedHalfDiagonal);
+  halfDiagonalRange.min=Math.ceil(hdr.min);
+  halfDiagonalRange.max=Math.floor(hdr.max);
+  halfDiagonalNumber.min=Math.ceil(hdr.min);
+  halfDiagonalNumber.max=Math.floor(hdr.max);
+
+  const hdLen=Math.round(halfDiagonalLength(selectedHalfDiagonal));
+  halfDiagonalRange.value=clamp(hdLen,+halfDiagonalRange.min,+halfDiagonalRange.max);
+  halfDiagonalNumber.value=hdLen;
+
+  const dAng=Math.round(diagonalAngleDegrees());
+  diagonalAngleRange.value=clamp(dAng,10,170);
+  diagonalAngleNumber.value=dAng;
 }
 
 function updateStats(){
@@ -1126,6 +1299,21 @@ sideNumber.addEventListener("change",()=>setLength(selectedSide,+sideNumber.valu
 angleRange.addEventListener("input",()=>setAngle(selectedAngle,+angleRange.value));
 angleNumber.addEventListener("change",()=>setAngle(selectedAngle,+angleNumber.value));
 
+halfDiagonalButtons.forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    selectedHalfDiagonal=+btn.dataset.halfDiagonal;
+    halfDiagonalButtons.forEach(b=>b.classList.toggle("active",b===btn));
+    showDiagonals.checked=true;
+    render();
+  });
+});
+
+halfDiagonalRange.addEventListener("input",()=>setHalfDiagonalLength(selectedHalfDiagonal,+halfDiagonalRange.value));
+halfDiagonalNumber.addEventListener("change",()=>setHalfDiagonalLength(selectedHalfDiagonal,+halfDiagonalNumber.value));
+
+diagonalAngleRange.addEventListener("input",()=>setDiagonalAngle(+diagonalAngleRange.value));
+diagonalAngleNumber.addEventListener("change",()=>setDiagonalAngle(+diagonalAngleNumber.value));
+
 [showLengths,showAngles,showDiagonals,showGrid].forEach(x=>x.addEventListener("change",render));
 
 document.getElementById("resetBtn").addEventListener("click",()=>{
@@ -1163,6 +1351,26 @@ document.getElementById("rectBtn").addEventListener("click",()=>{
   render();
 });
 
+document.getElementById("rhombusBtn").addEventListener("click",()=>{
+  P=[
+    {x:250,y:335},
+    {x:450,y:175},
+    {x:650,y:335},
+    {x:450,y:495}
+  ];
+  render();
+});
+
+document.getElementById("squareBtn").addEventListener("click",()=>{
+  P=[
+    {x:270,y:155},
+    {x:630,y:155},
+    {x:630,y:515},
+    {x:270,y:515}
+  ];
+  render();
+});
+
 document.getElementById("parallelABCD").addEventListener("click",()=>{
   makeOppositeSidesParallel("AB_CD");
 });
@@ -1178,7 +1386,7 @@ document.getElementById("downloadProgramBtn").addEventListener("click",()=>{
     const url=URL.createObjectURL(blob);
     const a=document.createElement("a");
     a.href=url;
-    a.download="사각형_길이_각_조절기.html";
+    a.download="사각형_길이_각_AO_BO_CO_DO_조절기.html";
     document.body.appendChild(a);
     a.click();
     a.remove();
