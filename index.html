@@ -59,6 +59,9 @@
     box-shadow: 0 5px 20px rgba(15,23,42,.06);
   }
   .canvas-card { padding: 12px; }
+  .canvas-stage{
+    position: relative;
+  }
   svg {
     width: 100%;
     height: auto;
@@ -68,6 +71,84 @@
     background: white;
     user-select: none;
     touch-action: none;
+  }
+  .under-canvas-controls{
+    margin-top: 12px;
+    padding: 10px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: #f8fafc;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 12px;
+  }
+  .under-canvas-controls label{
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 13px;
+    color: #334155;
+    font-weight: 700;
+    border: 1px solid #cbd5e1;
+    background: white;
+    border-radius: 999px;
+    padding: 7px 11px;
+    transition: .18s ease;
+  }
+  .under-canvas-controls label.length-lock-active{
+    color: #1d4ed8;
+    background: #dbeafe;
+    border-color: #60a5fa;
+    box-shadow: 0 0 0 2px rgba(96,165,250,.15);
+  }
+  .under-canvas-controls label.angle-lock-active{
+    color: #92400e;
+    background: #fef3c7;
+    border-color: #f59e0b;
+    box-shadow: 0 0 0 2px rgba(245,158,11,.13);
+  }
+  .lock-notice{
+    flex-basis: 100%;
+    display: none;
+    padding: 9px 11px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.45;
+  }
+  .lock-notice.show{
+    display: block;
+  }
+  .lock-notice.length{
+    background: #eff6ff;
+    border: 1px solid #93c5fd;
+    color: #1e40af;
+  }
+  .lock-notice.angle{
+    background: #fffbeb;
+    border: 1px solid #fbbf24;
+    color: #92400e;
+  }
+  .lock-notice.both{
+    background: #f5f3ff;
+    border: 1px solid #c4b5fd;
+    color: #5b21b6;
+  }
+  .shape-badge{
+    position: absolute;
+    right: 18px;
+    bottom: 16px;
+    z-index: 5;
+    padding: 9px 13px;
+    border-radius: 12px;
+    background: rgba(15,23,42,.86);
+    color: white;
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: -.01em;
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgba(15,23,42,.16);
+    backdrop-filter: blur(2px);
   }
   .panel {
     padding: 16px;
@@ -247,6 +328,7 @@
 
   <div class="layout">
     <div class="card canvas-card">
+      <div class="canvas-stage">
       <svg id="svg" viewBox="0 0 900 675">
         <defs>
           <pattern id="gridPattern" width="25" height="25" patternUnits="userSpaceOnUse">
@@ -261,6 +343,13 @@
         <g id="measureLayer"></g>
         <g id="pointLayer"></g>
       </svg>
+      <div id="shapeBadge" class="shape-badge">현재 모양: 일반 사각형</div>
+      </div>
+      <div class="under-canvas-controls">
+        <label id="lengthLockLabel"><input id="lockLengthsOnAngle" type="checkbox"> 길이 고정(각 조절 시)</label>
+        <label id="angleLockLabel"><input id="lockAnglesOnLength" type="checkbox"> 각도 고정(길이 조절 시)</label>
+        <div id="lockNotice" class="lock-notice"></div>
+      </div>
     </div>
 
     <div class="card panel">
@@ -436,6 +525,13 @@ const showAngles = document.getElementById("showAngles");
 const showDiagonals = document.getElementById("showDiagonals");
 const showGrid = document.getElementById("showGrid");
 
+const lockLengthsOnAngle = document.getElementById("lockLengthsOnAngle");
+const lockAnglesOnLength = document.getElementById("lockAnglesOnLength");
+const lengthLockLabel = document.getElementById("lengthLockLabel");
+const angleLockLabel = document.getElementById("angleLockLabel");
+const lockNotice = document.getElementById("lockNotice");
+const shapeBadge = document.getElementById("shapeBadge");
+
 const stats = document.getElementById("stats");
 const conditionBox = document.getElementById("conditionBox");
 
@@ -573,7 +669,7 @@ function angleFeasibleRange(vertexIndex){
   return {min:10,max:170};
 }
 
-function setLength(sideIndex, newLen){
+function setLengthDefault(sideIndex, newLen){
   const i=sideIndex;
   const j=(i+1)%4;
   const k=(i+2)%4;
@@ -611,7 +707,7 @@ function setLength(sideIndex, newLen){
   }
 }
 
-function setAngle(vertexIndex, targetDeg){
+function setAngleDefault(vertexIndex, targetDeg){
   const i=vertexIndex;
   const j=(i+1)%4;   // 움직일 꼭짓점
   const k=(i+2)%4;   // 맞은편 꼭짓점
@@ -680,6 +776,163 @@ function setAngle(vertexIndex, targetDeg){
   if(best){
     P=best;
     render();
+  }
+}
+
+
+function fitPointsIntoCanvas(points){
+  const minX=Math.min(...points.map(p=>p.x));
+  const maxX=Math.max(...points.map(p=>p.x));
+  const minY=Math.min(...points.map(p=>p.y));
+  const maxY=Math.max(...points.map(p=>p.y));
+
+  let dx=0, dy=0;
+  if(minX<35) dx=35-minX;
+  if(maxX+dx>865) dx += 865-(maxX+dx);
+  if(minY<35) dy=35-minY;
+  if(maxY+dy>640) dy += 640-(maxY+dy);
+
+  return points.map(p=>({x:p.x+dx,y:p.y+dy}));
+}
+
+function setLengthPreserveAngles(sideIndex, newLen){
+  const dirs=[
+    unitVector(P[0],P[1]),
+    unitVector(P[1],P[2]),
+    unitVector(P[2],P[3]),
+    unitVector(P[3],P[0])
+  ];
+  const currentLens=[
+    dist(P[0],P[1]),
+    dist(P[1],P[2]),
+    dist(P[2],P[3]),
+    dist(P[3],P[0])
+  ];
+
+  const target=clamp(Number(newLen),40,700);
+  const otherIdx=[0,1,2,3].filter(idx=>idx!==sideIndex);
+
+  const A=[
+    [dirs[otherIdx[0]].x, dirs[otherIdx[1]].x, dirs[otherIdx[2]].x],
+    [dirs[otherIdx[0]].y, dirs[otherIdx[1]].y, dirs[otherIdx[2]].y]
+  ];
+  const x0=otherIdx.map(idx=>currentLens[idx]);
+  const b=[-target*dirs[sideIndex].x, -target*dirs[sideIndex].y];
+
+  const Ax0=[
+    A[0][0]*x0[0] + A[0][1]*x0[1] + A[0][2]*x0[2],
+    A[1][0]*x0[0] + A[1][1]*x0[1] + A[1][2]*x0[2]
+  ];
+  const residual=[b[0]-Ax0[0], b[1]-Ax0[1]];
+
+  const m00=A[0][0]*A[0][0] + A[0][1]*A[0][1] + A[0][2]*A[0][2];
+  const m01=A[0][0]*A[1][0] + A[0][1]*A[1][1] + A[0][2]*A[1][2];
+  const m11=A[1][0]*A[1][0] + A[1][1]*A[1][1] + A[1][2]*A[1][2];
+  const det=m00*m11-m01*m01;
+  if(Math.abs(det)<1e-8) return;
+
+  const inv00=m11/det, inv01=-m01/det, inv11=m00/det;
+  const lam0=inv00*residual[0] + inv01*residual[1];
+  const lam1=inv01*residual[0] + inv11*residual[1];
+
+  const delta=[
+    A[0][0]*lam0 + A[1][0]*lam1,
+    A[0][1]*lam0 + A[1][1]*lam1,
+    A[0][2]*lam0 + A[1][2]*lam1
+  ];
+  const x=[x0[0]+delta[0], x0[1]+delta[1], x0[2]+delta[2]];
+
+  if(x.some(v=>v<15 || !isFinite(v))) return;
+
+  const lens=[...currentLens];
+  lens[sideIndex]=target;
+  otherIdx.forEach((idx,pos)=>lens[idx]=x[pos]);
+
+  const q=[
+    {x:P[0].x,y:P[0].y},
+    {x:P[0].x + dirs[0].x*lens[0], y:P[0].y + dirs[0].y*lens[0]}
+  ];
+  q[2]={x:q[1].x + dirs[1].x*lens[1], y:q[1].y + dirs[1].y*lens[1]};
+  q[3]={x:q[2].x + dirs[2].x*lens[2], y:q[2].y + dirs[2].y*lens[2]};
+
+  const shouldBeP0={x:q[3].x + dirs[3].x*lens[3], y:q[3].y + dirs[3].y*lens[3]};
+  if(dist(shouldBeP0,q[0]) > 2) return;
+
+  const fitted=fitPointsIntoCanvas(q);
+  if(!isConvexPoints(fitted)) return;
+
+  P=fitted;
+  render();
+}
+
+function setAnglePreserveLengths(vertexIndex, targetDeg){
+  const i=vertexIndex;
+  const j=(i+1)%4;
+  const k=(i+2)%4;
+  const l=(i+3)%4;
+
+  const lenIJ=dist(P[i],P[j]);
+  const lenJK=dist(P[j],P[k]);
+  const lenKL=dist(P[k],P[l]);
+
+  const cur=P[i];
+  const prev=P[l];
+  const oldNext=P[j];
+  const oldOpp=P[k];
+  const oldArea=polygonArea(P);
+
+  const base=unitVector(cur, prev);
+  const candDirs=[
+    rotateVector(base.x,base.y, rad(targetDeg)),
+    rotateVector(base.x,base.y,-rad(targetDeg))
+  ];
+
+  let best=null;
+  let bestScore=Infinity;
+
+  for(const d of candDirs){
+    const newNext={
+      x:cur.x + d.x*lenIJ,
+      y:cur.y + d.y*lenIJ
+    };
+
+    const inters=circleIntersections(newNext, lenJK, prev, lenKL);
+    for(const inter of inters){
+      const q=P.map(p=>({x:p.x,y:p.y}));
+      q[j]=newNext;
+      q[k]={x:inter.x,y:inter.y};
+
+      let score=dist(newNext, oldNext) + dist(q[k], oldOpp);
+      if(!isConvexPoints(q)) score += 100000;
+      if(oldArea!==0 && polygonArea(q)*oldArea<0) score += 50000;
+      if(q.some(p=>p.x<20 || p.x>880 || p.y<20 || p.y>655)) score += 5000;
+
+      if(score<bestScore){
+        bestScore=score;
+        best=q;
+      }
+    }
+  }
+
+  if(best){
+    P=best;
+    render();
+  }
+}
+
+function setLength(sideIndex, newLen){
+  if(lockAnglesOnLength.checked){
+    setLengthPreserveAngles(sideIndex, newLen);
+  }else{
+    setLengthDefault(sideIndex, newLen);
+  }
+}
+
+function setAngle(vertexIndex, targetDeg){
+  if(lockLengthsOnAngle.checked){
+    setAnglePreserveLengths(vertexIndex, targetDeg);
+  }else{
+    setAngleDefault(vertexIndex, targetDeg);
   }
 }
 
@@ -1049,6 +1302,7 @@ function render(){
 
   syncControls();
   updateStats();
+  updateLockUI();
 }
 
 function syncControls(){
@@ -1087,6 +1341,29 @@ function syncControls(){
   const dAng=Math.round(diagonalAngleDegrees());
   diagonalAngleRange.value=clamp(dAng,10,170);
   diagonalAngleNumber.value=dAng;
+}
+
+
+function updateLockUI(){
+  const lengthOn=lockLengthsOnAngle.checked;
+  const angleOn=lockAnglesOnLength.checked;
+
+  lengthLockLabel.classList.toggle("length-lock-active", lengthOn);
+  angleLockLabel.classList.toggle("angle-lock-active", angleOn);
+
+  lockNotice.className="lock-notice";
+  if(lengthOn && angleOn){
+    lockNotice.classList.add("show","both");
+    lockNotice.textContent="길이 고정과 각도 고정이 모두 켜져 있습니다. 각 조절 시 변의 길이를, 길이 조절 시 각의 크기를 유지합니다.";
+  }else if(lengthOn){
+    lockNotice.classList.add("show","length");
+    lockNotice.textContent="길이 고정 ON: 각도를 조절해도 네 변의 길이는 유지됩니다.";
+  }else if(angleOn){
+    lockNotice.classList.add("show","angle");
+    lockNotice.textContent="각도 고정 ON: 길이를 조절해도 네 각의 크기는 유지됩니다.";
+  }else{
+    lockNotice.textContent="";
+  }
 }
 
 function updateStats(){
@@ -1137,15 +1414,35 @@ function updateStats(){
     lineParallel(P[0],P[1],P[3],P[2]) &&
     lineParallel(P[1],P[2],P[0],P[3]);
 
+  const allSidesEqual =
+    Math.abs(lengths[0]-lengths[1])<tolLen &&
+    Math.abs(lengths[1]-lengths[2])<tolLen &&
+    Math.abs(lengths[2]-lengths[3])<tolLen;
+
+  const allRightAngles = angles.every(a=>Math.abs(a-90)<tolAng);
+
+  let shapeName="일반 사각형";
   if(!isConvex()){
-    conditionBox.innerHTML="<b>현재 모양:</b> 오목하거나 교차된 사각형일 수 있습니다.<br>꼭짓점을 옮겨 볼록한 사각형으로 만들어 보세요.";
-  } else if(para){
-    conditionBox.innerHTML="<b>현재 모양:</b> 평행사변형입니다.<br>" +
-      (found.length ? "확인되는 조건: " + found.join(", ") : "");
-  } else if(found.length){
-    conditionBox.innerHTML="<b>확인되는 조건:</b><br>" + found.join("<br>");
-  } else {
-    conditionBox.innerHTML="<b>현재 모양:</b> 일반 사각형입니다.<br>꼭짓점을 움직이며 평행사변형이 되는 조건을 찾아보세요.";
+    shapeName="오목/교차 사각형";
+  }else if(para && allSidesEqual && allRightAngles){
+    shapeName="정사각형";
+  }else if(para && allRightAngles){
+    shapeName="직사각형";
+  }else if(para && allSidesEqual){
+    shapeName="마름모";
+  }else if(para){
+    shapeName="평행사변형";
+  }
+
+  shapeBadge.textContent=`현재 모양: ${shapeName}`;
+
+  // 모양에 대한 설명은 표시하지 않고, 학습에 필요한 '확인되는 조건'만 남김
+  if(found.length){
+    conditionBox.style.display="block";
+    conditionBox.innerHTML="<b>확인되는 조건</b><br>" + found.join("<br>");
+  }else{
+    conditionBox.style.display="none";
+    conditionBox.innerHTML="";
   }
 }
 
@@ -1315,6 +1612,10 @@ diagonalAngleRange.addEventListener("input",()=>setDiagonalAngle(+diagonalAngleR
 diagonalAngleNumber.addEventListener("change",()=>setDiagonalAngle(+diagonalAngleNumber.value));
 
 [showLengths,showAngles,showDiagonals,showGrid].forEach(x=>x.addEventListener("change",render));
+[lockLengthsOnAngle, lockAnglesOnLength].forEach(x=>x.addEventListener("change",()=>{
+  updateLockUI();
+  render();
+}));
 
 document.getElementById("resetBtn").addEventListener("click",()=>{
   P=[{x:220,y:180},{x:610,y:190},{x:690,y:470},{x:300,y:460}];
@@ -1386,7 +1687,7 @@ document.getElementById("downloadProgramBtn").addEventListener("click",()=>{
     const url=URL.createObjectURL(blob);
     const a=document.createElement("a");
     a.href=url;
-    a.download="사각형_길이_각_AO_BO_CO_DO_조절기.html";
+    a.download="사각형_길이_각_고정기능_현재모양_표시.html";
     document.body.appendChild(a);
     a.click();
     a.remove();
