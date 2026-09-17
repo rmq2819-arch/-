@@ -107,6 +107,12 @@
     border-color: #f59e0b;
     box-shadow: 0 0 0 2px rgba(245,158,11,.13);
   }
+  .under-canvas-controls label.parallel-lock-active{
+    color: #166534;
+    background: #dcfce7;
+    border-color: #4ade80;
+    box-shadow: 0 0 0 2px rgba(74,222,128,.14);
+  }
   .lock-notice{
     flex-basis: 100%;
     display: none;
@@ -128,6 +134,11 @@
     background: #fffbeb;
     border: 1px solid #fbbf24;
     color: #92400e;
+  }
+  .lock-notice.parallel{
+    background: #f0fdf4;
+    border: 1px solid #86efac;
+    color: #166534;
   }
   .lock-notice.both{
     background: #f5f3ff;
@@ -348,6 +359,7 @@
       <div class="under-canvas-controls">
         <label id="lengthLockLabel"><input id="lockLengthsOnAngle" type="checkbox"> 길이 고정(각 조절 시)</label>
         <label id="angleLockLabel"><input id="lockAnglesOnLength" type="checkbox"> 각도 고정(길이 조절 시)</label>
+        <label id="parallelLockLabel"><input id="lockParallel" type="checkbox"> 평행 고정(변 길이·각 조절 시)</label>
         <div id="lockNotice" class="lock-notice"></div>
       </div>
     </div>
@@ -520,6 +532,117 @@ let selectedSide = 0;
 let selectedAngle = 0;
 let selectedHalfDiagonal = 0;
 
+// 변 길이·각도 조절 애니메이션 상태
+// 좌표를 단순 보간하지 않고 '길이/각 값' 자체를 부드럽게 변화시킨다.
+// 그래서 길이 고정·각도 고정·평행 고정 조건도 애니메이션 중 계속 적용된다.
+let geometryAnimationFrame = null;
+let geometryAnimating = false;
+let geometryAnimation = null;
+let geometryLastTime = 0;
+
+function currentGeometryValue(type,index){
+  if(type==="length"){
+    return dist(P[index],P[(index+1)%4]);
+  }
+  return interiorAngle(P[(index+3)%4],P[index],P[(index+1)%4]);
+}
+
+function cancelGeometryAnimation(keepCurrent=true){
+  if(geometryAnimationFrame !== null){
+    cancelAnimationFrame(geometryAnimationFrame);
+    geometryAnimationFrame=null;
+  }
+  geometryAnimating=false;
+  geometryAnimation=null;
+  geometryLastTime=0;
+  if(!keepCurrent) render();
+}
+
+function geometryAnimationStep(now){
+  if(!geometryAnimation){
+    geometryAnimating=false;
+    geometryAnimationFrame=null;
+    return;
+  }
+
+  const anim=geometryAnimation;
+  const dt=geometryLastTime ? Math.min(50,Math.max(1,now-geometryLastTime)) : 16;
+  geometryLastTime=now;
+
+  const actual=currentGeometryValue(anim.type,anim.index);
+  const remaining=anim.target-actual;
+
+  // 약 0.25~0.35초 안에 목표값에 자연스럽게 수렴하도록 설정
+  const alpha=1-Math.exp(-dt/78);
+  let next=actual + remaining*alpha;
+
+  const tolerance=anim.type==="length" ? 0.35 : 0.12;
+  const finish=Math.abs(remaining)<=tolerance;
+
+  if(finish) next=anim.target;
+
+  if(anim.type==="length"){
+    setLength(anim.index,next);
+  }else{
+    setAngle(anim.index,next);
+  }
+
+  const after=currentGeometryValue(anim.type,anim.index);
+  const reached=Math.abs(anim.target-after)<=tolerance;
+
+  if(finish || reached){
+    // 마지막 프레임은 목표값을 정확히 한 번 더 적용
+    if(anim.type==="length"){
+      setLength(anim.index,anim.target);
+    }else{
+      setAngle(anim.index,anim.target);
+    }
+
+    geometryAnimating=false;
+    geometryAnimation=null;
+    geometryAnimationFrame=null;
+    geometryLastTime=0;
+    render();
+    return;
+  }
+
+  geometryAnimationFrame=requestAnimationFrame(geometryAnimationStep);
+}
+
+function startGeometryAnimation(type,index,target){
+  target=Number(target);
+  if(!Number.isFinite(target)) return;
+
+  // 같은 조절을 연속으로 하는 동안에는 RAF를 끊지 않고
+  // 목표값만 갱신한다. 따라서 슬라이더를 움직이는 중에도 계속 움직인다.
+  if(geometryAnimating &&
+     geometryAnimation &&
+     geometryAnimation.type===type &&
+     geometryAnimation.index===index){
+    geometryAnimation.target=target;
+    return;
+  }
+
+  cancelGeometryAnimation(true);
+
+  geometryAnimation={
+    type,
+    index,
+    target
+  };
+  geometryAnimating=true;
+  geometryLastTime=performance.now();
+  geometryAnimationFrame=requestAnimationFrame(geometryAnimationStep);
+}
+
+function setLengthAnimated(sideIndex,newLen){
+  startGeometryAnimation("length",sideIndex,newLen);
+}
+
+function setAngleAnimated(vertexIndex,targetDeg){
+  startGeometryAnimation("angle",vertexIndex,targetDeg);
+}
+
 const showLengths = document.getElementById("showLengths");
 const showAngles = document.getElementById("showAngles");
 const showDiagonals = document.getElementById("showDiagonals");
@@ -527,8 +650,10 @@ const showGrid = document.getElementById("showGrid");
 
 const lockLengthsOnAngle = document.getElementById("lockLengthsOnAngle");
 const lockAnglesOnLength = document.getElementById("lockAnglesOnLength");
+const lockParallel = document.getElementById("lockParallel");
 const lengthLockLabel = document.getElementById("lengthLockLabel");
 const angleLockLabel = document.getElementById("angleLockLabel");
+const parallelLockLabel = document.getElementById("parallelLockLabel");
 const lockNotice = document.getElementById("lockNotice");
 const shapeBadge = document.getElementById("shapeBadge");
 
@@ -920,15 +1045,296 @@ function setAnglePreserveLengths(vertexIndex, targetDeg){
   }
 }
 
-function setLength(sideIndex, newLen){
-  if(lockAnglesOnLength.checked){
-    setLengthPreserveAngles(sideIndex, newLen);
+
+function getParallelState(){
+  return {
+    abcd: lineParallel(P[0],P[1],P[3],P[2]),
+    bcda: lineParallel(P[1],P[2],P[0],P[3])
+  };
+}
+
+function lineCircleIntersections(linePoint, dir, circleCenter, radius){
+  const uLen=Math.hypot(dir.x,dir.y) || 1;
+  const u={x:dir.x/uLen,y:dir.y/uLen};
+  const wx=linePoint.x-circleCenter.x;
+  const wy=linePoint.y-circleCenter.y;
+
+  const b=2*(wx*u.x+wy*u.y);
+  const c=wx*wx+wy*wy-radius*radius;
+  const disc=b*b-4*c;
+  if(disc < -1e-8) return [];
+  const sd=Math.sqrt(Math.max(0,disc));
+  const t1=(-b+sd)/2;
+  const t2=(-b-sd)/2;
+
+  const p1={x:linePoint.x+t1*u.x,y:linePoint.y+t1*u.y};
+  if(sd<1e-8) return [p1];
+  return [
+    p1,
+    {x:linePoint.x+t2*u.x,y:linePoint.y+t2*u.y}
+  ];
+}
+
+function chooseBestPoint(candidates, oldPoint, testFn=null){
+  let best=null, bestScore=Infinity;
+  for(const c of candidates){
+    let score=dist(c,oldPoint);
+    if(testFn && !testFn(c)) score += 100000;
+    if(c.x<20 || c.x>880 || c.y<20 || c.y>655) score += 5000;
+    if(score<bestScore){
+      bestScore=score;
+      best=c;
+    }
+  }
+  return best;
+}
+
+function setLengthPreserveParallelogram(sideIndex,newLen){
+  const A={...P[0]};
+  const u={x:P[1].x-P[0].x,y:P[1].y-P[0].y};
+  const v={x:P[3].x-P[0].x,y:P[3].y-P[0].y};
+  const lu=Math.hypot(u.x,u.y) || 1;
+  const lv=Math.hypot(v.x,v.y) || 1;
+  const target=clamp(Number(newLen),20,650);
+
+  let nu={...u}, nv={...v};
+  if(sideIndex===0 || sideIndex===2){
+    nu={x:u.x/lu*target,y:u.y/lu*target};
   }else{
-    setLengthDefault(sideIndex, newLen);
+    nv={x:v.x/lv*target,y:v.y/lv*target};
+  }
+
+  let q=[
+    A,
+    {x:A.x+nu.x,y:A.y+nu.y},
+    {x:A.x+nu.x+nv.x,y:A.y+nu.y+nv.y},
+    {x:A.x+nv.x,y:A.y+nv.y}
+  ];
+  q=fitPointsIntoCanvas(q);
+  if(isConvexPoints(q)){
+    P=q;
+    render();
   }
 }
 
+function setLengthPreserveOneParallel(sideIndex,newLen,pair){
+  // pair=0 : AB ∥ CD
+  // pair=1 : BC ∥ DA
+  const shift = pair===0 ? 0 : 1;
+  const q=[0,1,2,3].map(t=>{
+    const idx=(t+shift)%4;
+    return {x:P[idx].x,y:P[idx].y};
+  });
+  const s=(sideIndex-shift+4)%4;
+  const j=(s+1)%4;
+  const old=q[j];
+  const target=clamp(Number(newLen),20,650);
+
+  let linePoint, refDir;
+
+  // 움직이는 꼭짓점이 속한 평행변을,
+  // 움직이지 않는 맞은편 평행변과 정확히 평행하게 유지한다.
+  if(j===1){          // B: AB를 DC와 평행
+    linePoint=q[0];
+    refDir={x:q[2].x-q[3].x,y:q[2].y-q[3].y}; // D->C
+  }else if(j===2){    // C: DC를 AB와 평행
+    linePoint=q[3];
+    refDir={x:q[1].x-q[0].x,y:q[1].y-q[0].y}; // A->B
+  }else if(j===3){    // D: DC를 AB와 평행
+    linePoint=q[2];
+    refDir={x:q[1].x-q[0].x,y:q[1].y-q[0].y}; // A->B
+  }else{              // A: AB를 DC와 평행
+    linePoint=q[1];
+    refDir={x:q[2].x-q[3].x,y:q[2].y-q[3].y}; // D->C
+  }
+
+  const center=q[s];
+  const candidates=lineCircleIntersections(linePoint,refDir,center,target);
+  if(!candidates.length) return;
+
+  const oldArea=polygonArea(q);
+  const best=chooseBestPoint(candidates,old,(c)=>{
+    const test=q.map(p=>({...p}));
+    test[j]={x:c.x,y:c.y};
+    return isConvexPoints(test) && (oldArea===0 || polygonArea(test)*oldArea>0);
+  });
+  if(!best) return;
+
+  q[j]={x:best.x,y:best.y};
+
+  const back=P.map(p=>({...p}));
+  for(let t=0;t<4;t++){
+    const idx=(t+shift)%4;
+    back[idx]=q[t];
+  }
+
+  if(isConvexPoints(back)){
+    P=fitPointsIntoCanvas(back);
+    render();
+  }
+}
+
+function setAnglePreserveParallelogram(vertexIndex,targetDeg){
+  const A={...P[0]};
+  const u={x:P[1].x-P[0].x,y:P[1].y-P[0].y};
+  const v={x:P[3].x-P[0].x,y:P[3].y-P[0].y};
+  const lu=Math.hypot(u.x,u.y) || 1;
+  const lv=Math.hypot(v.x,v.y) || 1;
+  const ux=u.x/lu, uy=u.y/lu;
+
+  // B,D의 각을 지정하면 A의 각은 180°-지정각
+  let targetA=(vertexIndex===0 || vertexIndex===2)
+    ? clamp(Number(targetDeg),10,170)
+    : 180-clamp(Number(targetDeg),10,170);
+
+  const oldCross=u.x*v.y-u.y*v.x;
+  const sign=oldCross>=0 ? 1 : -1;
+  const nvDir=rotateVector(ux,uy,rad(targetA*sign));
+  const nv={x:nvDir.x*lv,y:nvDir.y*lv};
+
+  let q=[
+    A,
+    {x:A.x+u.x,y:A.y+u.y},
+    {x:A.x+u.x+nv.x,y:A.y+u.y+nv.y},
+    {x:A.x+nv.x,y:A.y+nv.y}
+  ];
+  q=fitPointsIntoCanvas(q);
+  if(isConvexPoints(q)){
+    P=q;
+    render();
+  }
+}
+
+function setAnglePreserveOneParallel(vertexIndex,targetDeg,pair){
+  // AB ∥ CD 형태로 정규화해서 처리
+  const shift=pair===0 ? 0 : 1;
+  const q=[0,1,2,3].map(t=>{
+    const idx=(t+shift)%4;
+    return {x:P[idx].x,y:P[idx].y};
+  });
+  const vi=(vertexIndex-shift+4)%4;
+  const target=clamp(Number(targetDeg),10,170);
+
+  const A=q[0], B=q[1], C=q[2], D=q[3];
+  const u=unitVector(A,B);
+  const oldArea=polygonArea(q);
+  const orientation=oldArea>=0 ? 1 : -1;
+
+  const lenAB=dist(A,B);
+  const lenBC=dist(B,C);
+  const lenCD=dist(C,D);
+  const lenDA=dist(D,A);
+
+  let out=q.map(p=>({...p}));
+
+  if(vi===0 || vi===3){
+    // A와 D는 한 변 AD를 가로지르는 같은 쪽 내각이라 합이 180°
+    const targetA = vi===0 ? target : 180-target;
+    const candidates=[
+      rotateVector(u.x,u.y, rad(targetA)),
+      rotateVector(u.x,u.y,-rad(targetA))
+    ];
+
+    let best=null,bestScore=Infinity;
+    for(const wd of candidates){
+      const newD={x:A.x+wd.x*lenDA,y:A.y+wd.y*lenDA};
+      const newC={x:newD.x+u.x*lenCD,y:newD.y+u.y*lenCD};
+      const test=[{...A},{...B},newC,newD];
+      let score=dist(newD,D)+dist(newC,C);
+      if(!isConvexPoints(test)) score+=100000;
+      if(polygonArea(test)*oldArea<0) score+=50000;
+      if(test.some(p=>p.x<20||p.x>880||p.y<20||p.y>655)) score+=5000;
+      if(score<bestScore){bestScore=score;best=test;}
+    }
+    if(best) out=best;
+  }else{
+    // B와 C도 같은 쪽 내각이라 합이 180°
+    const targetB = vi===1 ? target : 180-target;
+    const ba={x:-u.x,y:-u.y};
+    const dirs=[
+      rotateVector(ba.x,ba.y, rad(targetB)),
+      rotateVector(ba.x,ba.y,-rad(targetB))
+    ];
+
+    let best=null,bestScore=Infinity;
+    for(const d of dirs){
+      const newC={x:B.x+d.x*lenBC,y:B.y+d.y*lenBC};
+      const newD={x:newC.x-u.x*lenCD,y:newC.y-u.y*lenCD};
+      const test=[{...A},{...B},newC,newD];
+      let score=dist(newC,C)+dist(newD,D);
+      if(!isConvexPoints(test)) score+=100000;
+      if(polygonArea(test)*oldArea<0) score+=50000;
+      if(test.some(p=>p.x<20||p.x>880||p.y<20||p.y>655)) score+=5000;
+      if(score<bestScore){bestScore=score;best=test;}
+    }
+    if(best) out=best;
+  }
+
+  const back=P.map(p=>({...p}));
+  for(let t=0;t<4;t++){
+    const idx=(t+shift)%4;
+    back[idx]=out[t];
+  }
+
+  if(isConvexPoints(back)){
+    P=fitPointsIntoCanvas(back);
+    render();
+  }
+}
+
+function setLength(sideIndex, newLen){
+  const ps=getParallelState();
+
+  // 각도 고정은 변의 방향 자체를 유지하므로,
+  // 기존에 평행한 대변도 함께 유지된다.
+  if(lockAnglesOnLength.checked){
+    setLengthPreserveAngles(sideIndex, newLen);
+    return;
+  }
+
+  if(lockParallel.checked){
+    if(ps.abcd && ps.bcda){
+      setLengthPreserveParallelogram(sideIndex,newLen);
+      return;
+    }
+    if(ps.abcd){
+      setLengthPreserveOneParallel(sideIndex,newLen,0);
+      return;
+    }
+    if(ps.bcda){
+      setLengthPreserveOneParallel(sideIndex,newLen,1);
+      return;
+    }
+  }
+
+  setLengthDefault(sideIndex, newLen);
+}
+
 function setAngle(vertexIndex, targetDeg){
+  const ps=getParallelState();
+
+  if(lockParallel.checked){
+    if(ps.abcd && ps.bcda){
+      // 평행사변형은 네 변의 길이를 유지한 채 기울기를 바꿀 수 있으므로
+      // 길이 고정과 평행 고정을 동시에 만족시킬 수 있다.
+      setAnglePreserveParallelogram(vertexIndex,targetDeg);
+      return;
+    }
+
+    if(ps.abcd || ps.bcda){
+      // 한 쌍만 평행한 사각형은 네 변의 길이까지 모두 고정하면
+      // 일반적으로 각도를 자유롭게 바꿀 수 없다.
+      if(lockLengthsOnAngle.checked){
+        render();
+        updateLockUI("한 쌍의 평행과 네 변의 길이를 모두 고정한 상태에서는 각도를 자유롭게 바꿀 수 없습니다.");
+        return;
+      }
+
+      setAnglePreserveOneParallel(vertexIndex,targetDeg,ps.abcd ? 0 : 1);
+      return;
+    }
+  }
+
   if(lockLengthsOnAngle.checked){
     setAnglePreserveLengths(vertexIndex, targetDeg);
   }else{
@@ -1300,7 +1706,9 @@ function render(){
     pointLayer.appendChild(t);
   });
 
-  syncControls();
+  // 애니메이션 도중에는 사용자가 조절 중인 슬라이더/입력값을
+  // 중간 프레임의 값으로 되돌리지 않는다.
+  if(!geometryAnimating) syncControls();
   updateStats();
   updateLockUI();
 }
@@ -1344,23 +1752,48 @@ function syncControls(){
 }
 
 
-function updateLockUI(){
+function updateLockUI(extraMessage=""){
   const lengthOn=lockLengthsOnAngle.checked;
   const angleOn=lockAnglesOnLength.checked;
+  const parallelOn=lockParallel.checked;
 
   lengthLockLabel.classList.toggle("length-lock-active", lengthOn);
   angleLockLabel.classList.toggle("angle-lock-active", angleOn);
+  parallelLockLabel.classList.toggle("parallel-lock-active", parallelOn);
+
+  const messages=[];
+  if(lengthOn) messages.push("길이 고정 ON: 각도를 조절해도 네 변의 길이를 유지합니다.");
+  if(angleOn) messages.push("각도 고정 ON: 길이를 조절해도 네 각의 크기를 유지합니다.");
+
+  if(parallelOn){
+    const ps=getParallelState();
+    if(ps.abcd && ps.bcda){
+      messages.push("평행 고정 ON: AB ∥ CD, BC ∥ DA를 유지합니다.");
+    }else if(ps.abcd){
+      messages.push("평행 고정 ON: AB ∥ CD를 유지합니다.");
+    }else if(ps.bcda){
+      messages.push("평행 고정 ON: BC ∥ DA를 유지합니다.");
+    }else{
+      messages.push("평행 고정 ON: 현재 평행한 대변이 없어 아직 적용되지 않습니다.");
+    }
+  }
+
+  if(extraMessage) messages.push(extraMessage);
 
   lockNotice.className="lock-notice";
-  if(lengthOn && angleOn){
-    lockNotice.classList.add("show","both");
-    lockNotice.textContent="길이 고정과 각도 고정이 모두 켜져 있습니다. 각 조절 시 변의 길이를, 길이 조절 시 각의 크기를 유지합니다.";
-  }else if(lengthOn){
-    lockNotice.classList.add("show","length");
-    lockNotice.textContent="길이 고정 ON: 각도를 조절해도 네 변의 길이는 유지됩니다.";
-  }else if(angleOn){
-    lockNotice.classList.add("show","angle");
-    lockNotice.textContent="각도 고정 ON: 길이를 조절해도 네 각의 크기는 유지됩니다.";
+  if(messages.length){
+    lockNotice.classList.add("show");
+    const activeCount=[lengthOn,angleOn,parallelOn].filter(Boolean).length;
+    if(activeCount>1){
+      lockNotice.classList.add("both");
+    }else if(lengthOn){
+      lockNotice.classList.add("length");
+    }else if(angleOn){
+      lockNotice.classList.add("angle");
+    }else if(parallelOn){
+      lockNotice.classList.add("parallel");
+    }
+    lockNotice.innerHTML=messages.join("<br>");
   }else{
     lockNotice.textContent="";
   }
@@ -1559,6 +1992,13 @@ function clientToSvg(evt){
 svg.addEventListener("pointerdown",e=>{
   const target=e.target.closest("circle[data-index]");
   if(!target) return;
+  if(geometryAnimationFrame !== null){
+    cancelAnimationFrame(geometryAnimationFrame);
+    geometryAnimationFrame=null;
+    geometryAnimating=false;
+    geometryAnimation=null;
+    geometryLastTime=0;
+  }
   dragging=+target.dataset.index;
   target.setPointerCapture?.(e.pointerId);
   e.preventDefault();
@@ -1576,6 +2016,7 @@ svg.addEventListener("pointercancel",()=>dragging=null);
 
 sideButtons.forEach(btn=>{
   btn.addEventListener("click",()=>{
+    cancelGeometryAnimation(true);
     selectedSide = +btn.dataset.side;
     sideButtons.forEach(b=>b.classList.toggle("active", b===btn));
     syncControls();
@@ -1584,17 +2025,18 @@ sideButtons.forEach(btn=>{
 
 angleButtons.forEach(btn=>{
   btn.addEventListener("click",()=>{
+    cancelGeometryAnimation(true);
     selectedAngle = +btn.dataset.angle;
     angleButtons.forEach(b=>b.classList.toggle("active", b===btn));
     syncControls();
   });
 });
 
-sideRange.addEventListener("input",()=>setLength(selectedSide,+sideRange.value));
-sideNumber.addEventListener("change",()=>setLength(selectedSide,+sideNumber.value));
+sideRange.addEventListener("input",()=>setLengthAnimated(selectedSide,+sideRange.value));
+sideNumber.addEventListener("change",()=>setLengthAnimated(selectedSide,+sideNumber.value));
 
-angleRange.addEventListener("input",()=>setAngle(selectedAngle,+angleRange.value));
-angleNumber.addEventListener("change",()=>setAngle(selectedAngle,+angleNumber.value));
+angleRange.addEventListener("input",()=>setAngleAnimated(selectedAngle,+angleRange.value));
+angleNumber.addEventListener("change",()=>setAngleAnimated(selectedAngle,+angleNumber.value));
 
 halfDiagonalButtons.forEach(btn=>{
   btn.addEventListener("click",()=>{
@@ -1612,12 +2054,19 @@ diagonalAngleRange.addEventListener("input",()=>setDiagonalAngle(+diagonalAngleR
 diagonalAngleNumber.addEventListener("change",()=>setDiagonalAngle(+diagonalAngleNumber.value));
 
 [showLengths,showAngles,showDiagonals,showGrid].forEach(x=>x.addEventListener("change",render));
-[lockLengthsOnAngle, lockAnglesOnLength].forEach(x=>x.addEventListener("change",()=>{
+[lockLengthsOnAngle, lockAnglesOnLength, lockParallel].forEach(x=>x.addEventListener("change",()=>{
   updateLockUI();
   render();
 }));
 
 document.getElementById("resetBtn").addEventListener("click",()=>{
+  if(geometryAnimationFrame !== null){
+    cancelAnimationFrame(geometryAnimationFrame);
+    geometryAnimationFrame=null;
+    geometryAnimating=false;
+    geometryAnimation=null;
+    geometryLastTime=0;
+  }
   P=[{x:220,y:180},{x:610,y:190},{x:690,y:470},{x:300,y:460}];
   render();
 });
@@ -1636,11 +2085,25 @@ function setRandomQuadrilateral(){
 }
 
 document.getElementById("randomBtn").addEventListener("click",()=>{
+  if(geometryAnimationFrame !== null){
+    cancelAnimationFrame(geometryAnimationFrame);
+    geometryAnimationFrame=null;
+    geometryAnimating=false;
+    geometryAnimation=null;
+    geometryLastTime=0;
+  }
   setRandomQuadrilateral();
   render();
 });
 
 document.getElementById("paraBtn").addEventListener("click",()=>{
+  if(geometryAnimationFrame !== null){
+    cancelAnimationFrame(geometryAnimationFrame);
+    geometryAnimationFrame=null;
+    geometryAnimating=false;
+    geometryAnimation=null;
+    geometryLastTime=0;
+  }
   const A={x:230,y:210}, B={x:600,y:210}, D={x:330,y:470};
   const C={x:B.x+D.x-A.x,y:B.y+D.y-A.y};
   P=[A,B,C,D];
@@ -1648,11 +2111,25 @@ document.getElementById("paraBtn").addEventListener("click",()=>{
 });
 
 document.getElementById("rectBtn").addEventListener("click",()=>{
+  if(geometryAnimationFrame !== null){
+    cancelAnimationFrame(geometryAnimationFrame);
+    geometryAnimationFrame=null;
+    geometryAnimating=false;
+    geometryAnimation=null;
+    geometryLastTime=0;
+  }
   P=[{x:220,y:190},{x:650,y:190},{x:650,y:470},{x:220,y:470}];
   render();
 });
 
 document.getElementById("rhombusBtn").addEventListener("click",()=>{
+  if(geometryAnimationFrame !== null){
+    cancelAnimationFrame(geometryAnimationFrame);
+    geometryAnimationFrame=null;
+    geometryAnimating=false;
+    geometryAnimation=null;
+    geometryLastTime=0;
+  }
   P=[
     {x:250,y:335},
     {x:450,y:175},
@@ -1663,6 +2140,13 @@ document.getElementById("rhombusBtn").addEventListener("click",()=>{
 });
 
 document.getElementById("squareBtn").addEventListener("click",()=>{
+  if(geometryAnimationFrame !== null){
+    cancelAnimationFrame(geometryAnimationFrame);
+    geometryAnimationFrame=null;
+    geometryAnimating=false;
+    geometryAnimation=null;
+    geometryLastTime=0;
+  }
   P=[
     {x:270,y:155},
     {x:630,y:155},
@@ -1673,10 +2157,24 @@ document.getElementById("squareBtn").addEventListener("click",()=>{
 });
 
 document.getElementById("parallelABCD").addEventListener("click",()=>{
+  if(geometryAnimationFrame !== null){
+    cancelAnimationFrame(geometryAnimationFrame);
+    geometryAnimationFrame=null;
+    geometryAnimating=false;
+    geometryAnimation=null;
+    geometryLastTime=0;
+  }
   makeOppositeSidesParallel("AB_CD");
 });
 
 document.getElementById("parallelBCDA").addEventListener("click",()=>{
+  if(geometryAnimationFrame !== null){
+    cancelAnimationFrame(geometryAnimationFrame);
+    geometryAnimationFrame=null;
+    geometryAnimating=false;
+    geometryAnimation=null;
+    geometryLastTime=0;
+  }
   makeOppositeSidesParallel("BC_DA");
 });
 
@@ -1687,7 +2185,7 @@ document.getElementById("downloadProgramBtn").addEventListener("click",()=>{
     const url=URL.createObjectURL(blob);
     const a=document.createElement("a");
     a.href=url;
-    a.download="사각형_길이_각_고정기능_현재모양_표시.html";
+    a.download="사각형_길이_각_애니메이션_개선버전.html";
     document.body.appendChild(a);
     a.click();
     a.remove();
